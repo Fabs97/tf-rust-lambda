@@ -1,6 +1,12 @@
+locals {
+  bin = var.function_name
+}
+
 module "this" {
     source = "terraform-aws-modules/lambda/aws"
     version = "7.2.1"
+
+    local_existing_package = "target/lambda/release/output/${local.bin}.zip"
 
     create = var.create
     create_package = var.create_package
@@ -98,9 +104,16 @@ module "this" {
     logging_application_log_level = var.logging_application_log_level
     logging_system_log_level = var.logging_system_log_level
     logging_log_group = var.logging_log_group
+
+    depends_on = [ null_resource.build ]
 }
 
 resource "null_resource" "build" {
+
+  triggers = {
+    source_sha1  = sha1(join("", [for f in fileset(var.source_path, "*"): filesha1("${var.source_path}/${f}")]))
+    source_libraries_sha1  = sha1(join("", [for f in fileset(var.source_libraries_path, "*"): filesha1("${var.source_libraries_path}/${f}")]))
+  }
   provisioner "local-exec" {
     command =<<EOT
 docker run --rm \
@@ -116,7 +129,7 @@ EOT
     working_dir = var.source_path
     environment = {
         PACKAGE: true,
-        BIN: var.function_name
+        BIN: local.bin
     }
     quiet = false
   }
